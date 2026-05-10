@@ -1,9 +1,19 @@
 cmake_minimum_required(VERSION 3.19)
 project(The_Artisan_of_Glimmith LANGUAGES CXX)
 
+# 确保开启了自动资源编译
+set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON) 
+
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets Multimedia)
 
 qt_standard_project_setup()
+
+# 显式定义资源文件
+set(TS_RESOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/resources.qrc"
+)
 
 qt_add_executable(The_Artisan_of_Glimmith
     WIN32 MACOSX_BUNDLE
@@ -11,7 +21,7 @@ qt_add_executable(The_Artisan_of_Glimmith
     artisanwindow.cpp
     artisanwindow.h
     artisanwindow.ui
-    ${CMAKE_CURRENT_SOURCE_DIR}/resources.qrc
+    ${TS_RESOURCES}
 )
 
 target_link_libraries(The_Artisan_of_Glimmith
@@ -20,6 +30,8 @@ target_link_libraries(The_Artisan_of_Glimmith
         Qt::Widgets
         Qt::Multimedia
 )
+
+# ... 剩下的 install 逻辑保持不变 ...
 
 install(TARGETS The_Artisan_of_Glimmith
     BUNDLE  DESTINATION .

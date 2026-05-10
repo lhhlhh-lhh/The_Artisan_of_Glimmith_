@@ -5,89 +5,133 @@
 #include <QMessageBox>
 #include <QCoreApplication>
 #include <QUrl>
+#include <QDebug>
+#include <QFile>
+#include <QStyleOption>
+#include <QMap>
 
 ArtisanWindow::ArtisanWindow(QWidget* parent)
-    : QMainWindow(parent), ui(new Ui::ArtisanWindow) {
+    : QMainWindow(parent)
+    , ui(new Ui::ArtisanWindow)
+    , currentPartId(0) // 初始化笔画计数器
+{
     ui->setupUi(this);
+
+    // 调试资源文件是否存在
+    qDebug() << "Resource file exists:" << QFile::exists(":/images/paper_bg.png");
+
     setFixedSize(800, 600);
+
+    // --- 🎨 样式表配置 ---
+    // 确保 WA_StyledBackground 开启，否则 QMainWindow 可能不响应样式表背景图
+    this->setAttribute(Qt::WA_StyledBackground, true);
+    this->setStyleSheet(
+        "QMainWindow {"
+        "  background-image: url(:/images/paper_bg.png);"
+        "  background-repeat: no-repeat;"
+        "  background-position: center;"
+        "  background-color: #f0e6d2;"
+        "}"
+    );
+
     loadSounds();
     loadLevel(currentLevel);
-    setMouseTracking(true);
+    setMouseTracking(true); // 开启鼠标追踪
 }
 
-// 注意：整个文件只能有一个析构函数！
 ArtisanWindow::~ArtisanWindow() {
     delete ui;
 }
 
+// 1. 加载关卡逻辑：支持动态行列与坐标计算
 void ArtisanWindow::loadLevel(int level) {
     levelPieces.clear();
-    int size = 60, startX = 100, startY = 150;
+    currentPartId = 0; // 重置当前关卡的笔画 ID
+
+    int rows = 0, cols = 0;
     if (level == 1) {
-        for (int i = 0; i < 5; ++i) {
-            GlassPiece p;
-            p.path.addRect(startX + i * size, startY, size, size);
-            p.color = Qt::white;
-            p.targetColor = Qt::red;
-            levelPieces << p;
-        }
-    }
-    else if (level == 2) {
-        for (int i = 0; i < 3; ++i) {
-            for (int j = 0; j < 3; ++j) {
-                GlassPiece p;
-                p.path.addRect(startX + i * size, startY + j * size, size, size);
-                p.color = Qt::white;
-                p.targetColor = (i == 1 || j == 1) ? Qt::green : Qt::white;
-                levelPieces << p;
-            }
-        }
+        rows = 8; cols = 8; // 第一关 8x8
     }
     else {
-        QMessageBox::information(this, "Game Over", "You are a master artisan!");
-        currentLevel = 1; loadLevel(1);
+        rows = 6; cols = 6; // 后续关卡默认 6x6
+    }
+
+    int size = 50; // 每个方格的边长
+    // 居中计算：左侧游戏区域宽度约为 650
+    int startX = (650 - cols * size) / 2;
+    int startY = (height() - rows * size) / 2;
+
+    for (int r = 0; r < rows; ++r) {
+        for (int c = 0; c < cols; ++c) {
+            GlassPiece p;
+            p.row = r;
+            p.col = c;
+            p.path.addRect(startX + c * size, startY + r * size, size, size);
+            p.color = Qt::white;
+            p.partId = -1; // 初始化为未涂色状态
+            levelPieces << p;
+        }
     }
     update();
 }
 
+// 2. 鼠标按下：区分 UI 点击与绘图开启
 void ArtisanWindow::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
+        // 如果点击位置在右侧工具栏（x > 650）
         if (event->pos().x() > 650) {
-            if (selectedColor == Qt::red) selectedColor = Qt::green;
-            else if (selectedColor == Qt::green) selectedColor = Qt::blue;
-            else selectedColor = Qt::red;
-            update();
+            // 这里可以添加点击色块切换 selectedColor 的逻辑
+            if (QRect(680, 100, 50, 50).contains(event->pos())) {
+                qDebug() << "Selected tool clicked";
+            }
         }
         else {
             isLeftPressed = true;
+            currentPartId++; // 开启一次新的“连续笔画”
             handlePainting(event->pos(), false);
         }
     }
     else if (event->button() == Qt::RightButton) {
         isRightPressed = true;
+        handlePainting(event->pos(), true); // 右键默认为橡皮擦
+    }
+}
+
+// 3. 鼠标移动：实现平滑的连续绘图
+void ArtisanWindow::mouseMoveEvent(QMouseEvent* event) {
+    if (isLeftPressed) {
+        handlePainting(event->pos(), false);
+    }
+    else if (isRightPressed) {
         handlePainting(event->pos(), true);
     }
 }
 
-void ArtisanWindow::mouseMoveEvent(QMouseEvent* event) {
-    if (isLeftPressed) handlePainting(event->pos(), false);
-    else if (isRightPressed) handlePainting(event->pos(), true);
-}
-
+// 4. 鼠标释放：结束笔画并触发过关检测
 void ArtisanWindow::mouseReleaseEvent(QMouseEvent* event) {
-    isLeftPressed = false;
-    isRightPressed = false;
-    checkWin();
+    if (event->button() == Qt::LeftButton) {
+        isLeftPressed = false;
+        checkWin(); // 玩家松开鼠标时检测是否达成 4 个 4x4
+    }
+    else if (event->button() == Qt::RightButton) {
+        isRightPressed = false;
+    }
 }
 
+// 5. 核心涂色逻辑：记录 PartId 并优化音效播放
 void ArtisanWindow::handlePainting(QPoint pos, bool isEraser) {
     QColor colorToApply = isEraser ? Qt::white : selectedColor;
+
     for (int i = 0; i < levelPieces.size(); ++i) {
         if (levelPieces[i].path.contains(pos)) {
+            // 只有颜色改变时才处理，避免重复触发音效
             if (levelPieces[i].color != colorToApply) {
                 levelPieces[i].color = colorToApply;
-                if (paintSound) {
-                    paintSound->stop();
+                // 如果是涂色，赋予当前笔画 ID；如果是擦除，重置为 -1
+                levelPieces[i].partId = isEraser ? -1 : currentPartId;
+
+                // 音效播放优化：不使用 stop() 以降低延迟
+                if (paintSound && paintSound->isLoaded()) {
                     paintSound->play();
                 }
                 update();
@@ -97,45 +141,95 @@ void ArtisanWindow::handlePainting(QPoint pos, bool isEraser) {
     }
 }
 
+// 6. 过关判定逻辑：基于 PartId 的几何分析
 void ArtisanWindow::checkWin() {
-    bool allCorrect = true;
-    for (const auto& p : levelPieces) {
-        if (p.color != p.targetColor) { allCorrect = false; break; }
-    }
-    if (allCorrect) {
-        if (winSound) {
-            winSound->stop();
-            winSound->play();
+    if (currentLevel == 1) {
+        // 使用 QMap 按 PartId 对格子进行分组
+        QMap<int, QList<int>> groups;
+        for (int i = 0; i < levelPieces.size(); ++i) {
+            if (levelPieces[i].partId != -1) {
+                groups[levelPieces[i].partId].append(i);
+            }
         }
-        QMessageBox::information(this, "Success", "Level Clear!");
-        currentLevel++; loadLevel(currentLevel);
+
+        int validSquareCount = 0;
+        for (auto it = groups.begin(); it != groups.end(); ++it) {
+            QList<int> indices = it.value();
+
+            // 条件 A: 每一个连续的部分必须恰好由 16 个方格组成 (4x4=16)
+            if (indices.size() != 16) continue;
+
+            // 条件 B: 检查这 16 个格子的行列范围是否符合 4x4 形状
+            int minR = 99, maxR = -1, minC = 99, maxC = -1;
+            for (int idx : indices) {
+                minR = qMin(minR, levelPieces[idx].row);
+                maxR = qMax(maxR, levelPieces[idx].row);
+                minC = qMin(minC, levelPieces[idx].col);
+                maxC = qMax(maxC, levelPieces[idx].col);
+            }
+
+            // 如果高度和宽度均为 4，说明是一个完整的 4x4 正方形
+            if ((maxR - minR + 1) == 4 && (maxC - minC + 1) == 4) {
+                validSquareCount++;
+            }
+        }
+
+        // 当场面上存在 4 个符合条件的 4x4 连续部分时过关
+        if (validSquareCount == 4) {
+            if (winSound && winSound->isLoaded()) winSound->play();
+            QMessageBox::information(this, "Masterpiece!", "恭喜！你成功画出了 4 个 4x4 的连续区域！");
+            currentLevel++;
+            loadLevel(currentLevel);
+        }
     }
 }
 
-void ArtisanWindow::paintEvent(QPaintEvent*) {
+// 7. 绘图事件：处理背景与游戏元素的层级
+void ArtisanWindow::paintEvent(QPaintEvent* event) {
+    // 绘制样式表背景（解决 QPainter 覆盖背景图的问题）
+    QStyleOption opt;
+    opt.initFrom(this);
+    QPainter p(this);
+    style()->drawPrimitive(QStyle::PE_Widget, &opt, &p, this);
+
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
-    painter.fillRect(rect(), QColor(40, 40, 40));
-    for (const auto& p : levelPieces) {
-        painter.setBrush(p.color);
-        painter.setPen(QPen(Qt::black, 2));
-        painter.drawPath(p.path);
+
+    // 绘制游戏格点
+    for (const auto& piece : levelPieces) {
+        painter.setBrush(piece.color);
+        painter.setPen(QPen(QColor(60, 40, 20, 150), 2)); // 深啡色边框
+        painter.drawPath(piece.path);
     }
-    painter.setBrush(QColor(80, 80, 80));
+
+    // 绘制右侧 UI 区域
+    painter.setBrush(QColor(0, 0, 0, 40)); // 半透明遮罩
+    painter.setPen(Qt::NoPen);
     painter.drawRect(650, 0, 150, height());
-    painter.setPen(Qt::white);
+
+    // 绘制文字状态
+    painter.setPen(QColor(80, 50, 30));
+    QFont font = painter.font();
+    font.setPixelSize(18);
+    font.setBold(true);
+    painter.setFont(font);
     painter.drawText(670, 50, QString("Level: %1").arg(currentLevel));
+
+    // 绘制当前选中的颜色预览
     painter.setBrush(selectedColor);
+    painter.setPen(QPen(QColor(60, 40, 20), 2));
     painter.drawRect(680, 100, 50, 50);
 }
 
+// 8. 加载音效：使用资源路径
 void ArtisanWindow::loadSounds() {
-    paintSound = std::make_unique<QSoundEffect>();
-    winSound = std::make_unique<QSoundEffect>();
+    paintSound = std::make_unique<QSoundEffect>(this);
+    winSound = std::make_unique<QSoundEffect>(this);
 
-    paintSound->setSource(QUrl::fromLocalFile(QCoreApplication::applicationDirPath() + "/sounds/paint.wav"));
-    paintSound->setVolume(1.0f);
+    // 使用 qrc 资源路径加载音效，确保跨平台兼容性
+    paintSound->setSource(QUrl("qrc:/sounds/paint.wav"));
+    winSound->setSource(QUrl("qrc:/sounds/win.wav"));
 
-    winSound->setSource(QUrl::fromLocalFile(QCoreApplication::applicationDirPath() + "/sounds/win.wav"));
-    winSound->setVolume(1.0f);
+    paintSound->setVolume(0.5f);
+    winSound->setVolume(0.7f);
 }
