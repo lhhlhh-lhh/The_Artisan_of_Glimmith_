@@ -43,7 +43,7 @@ private:
     bool isRightPressed = false;
     QColor selectedColor = Qt::red;
 
-    // 内存安全锁：解决 0xC0000409 堆栈溢出的核心
+    // 解决 0xC0000409 堆栈溢出
     bool isChecking = false;
 
     // 音效管理

@@ -35,7 +35,7 @@ public:
         int validSquares = 0;
         for (auto it = groups.constBegin(); it != groups.constEnd(); ++it) {
             const QList<int>& indices = it.value();
-            if (indices.size() != 16) continue; // 4x4 必须正好 16 格
+            if (indices.size() != 16) continue; // 4x4=16
 
             // 计算该区域的包围盒（Bounding Box）
             int minR = 99, maxR = -1, minC = 99, maxC = -1;
@@ -153,13 +153,137 @@ public:
             if (p.partId == -1) return false;
             groups[p.partId].append(p);
         }
-        // 数论判定：所有区域格数必须能被 3 整除
+        // 所有区域格数必须能被 3 整除
         for (auto group : groups) {
             if (group.size() % 3 != 0) return false;
         }
         return true;
     }
     QString getHint() const override { return "目标：\n三位一体！\n每个区域的格子数\n必须是 3 的倍数"; }
+};
+class Level5Handler : public LevelHandler {
+public:
+    void loadLevel(QList<GlassPiece>& pieces, int w, int h) override {
+        int rows = 10, cols = 10, size = 40; // 调整尺寸以适配复杂网格
+        int startX = (650 - 10 * size) / 2;
+        int startY = (h - 10 * size) / 2;
+
+        // 定义每一行有格子的列坐标 (注意：程序员习惯从0开始计算，这里按你描述的1-10进行转换)
+        QMap<int, QList<int>> layout;
+        layout[1] = { 2, 8 };
+        layout[2] = { 2, 3, 4, 7, 8, 9 };
+        layout[3] = { 1, 2, 3, 4, 7, 8, 9, 10 };
+        layout[4] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }; // 全部有空格
+        layout[5] = { 2, 4, 6, 7, 8, 9 };
+        layout[6] = { 2, 3, 4, 5, 6, 7, 8, 9 };
+        layout[7] = { 3, 4, 5, 6, 8, 9, 10 };
+        layout[8] = { 3, 4, 5, 6, 7, 8, 9 };
+        layout[9] = { 5, 6, 8 };
+
+        for (int r_idx = 1; r_idx <= 9; ++r_idx) {
+            for (int c_idx : layout[r_idx]) {
+                GlassPiece p;
+                // 转换为 0-based 坐标用于逻辑运算
+                p.row = r_idx - 1;
+                p.col = c_idx - 1;
+                // 绘制路径
+                p.path.addRect(startX + (c_idx - 1) * size, startY + (r_idx - 1) * size, size, size);
+                pieces << p;
+            }
+        }
+    }
+
+    bool checkWin(const QList<GlassPiece>& pieces) override {
+        QMap<int, QList<GlassPiece>> groups;
+        for (const auto& p : pieces) {
+            if (p.partId == -1) return false;
+            groups[p.partId].append(p);
+        }
+
+        for (auto it = groups.constBegin(); it != groups.constEnd(); ++it) {
+            const QList<GlassPiece>& group = it.value();
+            // 依然保持你图片中的 L 型判定逻辑：3格且占 2x2 空间
+            if (group.size() != 3) return false;
+
+            int minR = 10, maxR = -1, minC = 10, maxC = -1;
+            for (const auto& p : group) {
+                minR = qMin(minR, p.row); maxR = qMax(maxR, p.row);
+                minC = qMin(minC, p.col); maxC = qMax(maxC, p.col);
+            }
+            if (!((maxC - minC + 1) == 2 && (maxR - minR + 1) == 2)) return false;
+        }
+        return true;
+    }
+
+    QString getHint() const override {
+        return "目标：\n心之碎片\n请使用 3格L型\n填满这个复杂的图案";
+    }
+};
+// =================================================================
+// 关卡 6 逻辑：中轴镂空网格 + 复合形状判定 (Z-Block & 1x3 Bar)
+// 目标：使用“错位1x2”或“1x3长条”填满这片不规则区域
+// =================================================================
+class Level6Handler : public LevelHandler {
+public:
+    void loadLevel(QList<GlassPiece>& pieces, int w, int h) override {
+        int rows = 6, cols = 5, size = 60; // 6x5 布局
+        int startX = (650 - cols * size) / 2;
+        int startY = (h - rows * size) / 2;
+
+        // 根据你提供的最新坐标布阵
+        QMap<int, QList<int>> layout;
+        layout[1] = { 2, 4, 5 };
+        layout[2] = { 2, 3, 4, 5 };
+        layout[3] = { 1, 2, 5 };
+        layout[4] = { 1, 2, 4, 5 };
+        layout[5] = { 2, 4, 5 };
+        layout[6] = { 2, 3, 4, 5 };
+
+        for (int r_idx = 1; r_idx <= 6; ++r_idx) {
+            for (int c_idx : layout[r_idx]) {
+                GlassPiece p;
+                p.row = r_idx - 1; p.col = c_idx - 1;
+                p.path.addRect(startX + (c_idx - 1) * size, startY + (r_idx - 1) * size, size, size);
+                pieces << p;
+            }
+        }
+    }
+
+    bool checkWin(const QList<GlassPiece>& pieces) override {
+        QMap<int, QList<GlassPiece>> groups;
+        for (const auto& p : pieces) {
+            if (p.partId == -1) return false;
+            groups[p.partId].append(p);
+        }
+
+        for (auto it = groups.constBegin(); it != groups.constEnd(); ++it) {
+            const QList<GlassPiece>& group = it.value();
+            int n = group.size();
+
+            // 计算包围盒
+            int minR = 9, maxR = -1, minC = 9, maxC = -1;
+            for (const auto& p : group) {
+                minR = qMin(minR, p.row); maxR = qMax(maxR, p.row);
+                minC = qMin(minC, p.col); maxC = qMax(maxC, p.col);
+            }
+            int width = maxC - minC + 1;
+            int height = maxR - minR + 1;
+
+            // 形状 1: 1x3 的长方形 (横向或纵向)
+            bool isBar1x3 = (n == 3 && ((width == 1 && height == 3) || (width == 3 && height == 1)));
+
+            // 形状 2: 两个 1x2 错开 (俄罗斯方块 Z/S 型)
+            // 特征：4个格子，占据 3x2 或 2x3 的空间
+            bool isZBlock = (n == 4 && ((width == 3 && height == 2) || (width == 2 && height == 3)));
+
+            if (!isBar1x3 && !isZBlock) return false;
+        }
+        return true;
+    }
+
+    QString getHint() const override {
+        return "目标：\n错位秩序\n仅允许使用 1x3 长条\n或错位拼接的 Z 形块";
+    }
 };
 // 第二部分：主窗口控制器实现 (ArtisanWindow)
 // 负责资源加载、事件分发及核心渲染循环
@@ -196,6 +320,8 @@ void ArtisanWindow::loadLevel(int level) {
     else if (level == 2) levelStrategy = std::make_unique<Level2Handler>();
     else if (level == 3) levelStrategy = std::make_unique<Level3Handler>();
     else if (level == 4) levelStrategy = std::make_unique<Level4Handler>();
+    else if (level == 5) levelStrategy = std::make_unique<Level5Handler>();
+    else if (level == 6) levelStrategy = std::make_unique<Level6Handler>();
     else {
         QMessageBox::information(this, "Masterpiece!", "恭喜！你已经完成了所有挑战.");
         currentLevel = 1; loadLevel(1); return;
