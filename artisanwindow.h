@@ -6,7 +6,9 @@
 #include <QColor>
 #include <QPainterPath>
 #include <QSoundEffect>
+#include <QMap>
 #include <memory>
+#include "LevelHandler.h" // 确保 GlassPiece 在这里定义
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class ArtisanWindow; }
@@ -26,32 +28,33 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
-    // 将结构体移入私有区域，并增加逻辑判定所需的成员
-    struct GlassPiece {
-        QPainterPath path;
-        QColor color = Qt::white;
-        QColor targetColor = Qt::white;
-        int row;         // 记录所在的行
-        int col;         // 记录所在的列
-        int partId = -1; // 记录笔画ID，-1为未涂色，相同正数代表同一次画出的连续部分
-    };
-
     Ui::ArtisanWindow* ui;
-    QList<GlassPiece> levelPieces;
-    int currentLevel = 1;
-    int currentPartId = 0;   // 笔画计数器，用于区分不同的正方形笔迹
 
+    // 策略模式：解决 E0020 错误的关键
+    std::unique_ptr<LevelHandler> levelStrategy;
+
+    // 数据容器：直接使用来自 LevelHandler.h 的 GlassPiece
+    QList<GlassPiece> levelPieces;
+
+    // 状态控制
+    int currentLevel = 1;
+    int currentPartId = 0;
     bool isLeftPressed = false;
     bool isRightPressed = false;
     QColor selectedColor = Qt::red;
 
+    // 内存安全锁：解决 0xC0000409 堆栈溢出的核心
+    bool isChecking = false;
+
+    // 音效管理
     std::unique_ptr<QSoundEffect> paintSound;
     std::unique_ptr<QSoundEffect> winSound;
 
+    // 内部函数：确保在 .cpp 中实现时带有 ArtisanWindow:: 前缀
     void loadLevel(int level);
     void checkWin();
     void handlePainting(QPoint pos, bool isEraser);
     void loadSounds();
 };
 
-#endif
+#endif // ARTISANWINDOW_H
