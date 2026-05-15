@@ -51,7 +51,7 @@ public:
     QString getHint() const override { return "目标：\n将画面划分为\n4个 4x4 的大正方形"; }
 };
 
-// --- 关卡 2 逻辑：不规则 4x6，Domino（2格）与 L-shape（3格）判定 ---
+//关卡 2 逻辑：不规则 4x6，Domino（1*2）与 L-shape（3格）判定
 class Level2Handler : public LevelHandler {
 public:
     void loadLevel(QList<GlassPiece>& pieces, int w, int h) override {
@@ -168,7 +168,7 @@ public:
         int startX = (650 - 10 * size) / 2;
         int startY = (h - 10 * size) / 2;
 
-        // 定义每一行有格子的列坐标 (注意：程序员习惯从0开始计算，这里按你描述的1-10进行转换)
+        // 定义每一行有格子的列坐标 
         QMap<int, QList<int>> layout;
         layout[1] = { 2, 8 };
         layout[2] = { 2, 3, 4, 7, 8, 9 };
@@ -202,7 +202,7 @@ public:
 
         for (auto it = groups.constBegin(); it != groups.constEnd(); ++it) {
             const QList<GlassPiece>& group = it.value();
-            // 依然保持你图片中的 L 型判定逻辑：3格且占 2x2 空间
+            //L 型判定逻辑：3格且占 2x2 空间
             if (group.size() != 3) return false;
 
             int minR = 10, maxR = -1, minC = 10, maxC = -1;
@@ -216,13 +216,11 @@ public:
     }
 
     QString getHint() const override {
-        return "目标：\n心之碎片\n请使用 3格L型\n填满这个复杂的图案";
+        return "目标：\n请使用 3格L型\n填满这个复杂的图案";
     }
 };
-// =================================================================
 // 关卡 6 逻辑：中轴镂空网格 + 复合形状判定 (Z-Block & 1x3 Bar)
 // 目标：使用“错位1x2”或“1x3长条”填满这片不规则区域
-// =================================================================
 class Level6Handler : public LevelHandler {
 public:
     void loadLevel(QList<GlassPiece>& pieces, int w, int h) override {
@@ -230,7 +228,7 @@ public:
         int startX = (650 - cols * size) / 2;
         int startY = (h - rows * size) / 2;
 
-        // 根据你提供的最新坐标布阵
+        //坐标布阵
         QMap<int, QList<int>> layout;
         layout[1] = { 2, 4, 5 };
         layout[2] = { 2, 3, 4, 5 };
@@ -293,7 +291,7 @@ ArtisanWindow::ArtisanWindow(QWidget* parent)
     ui->setupUi(this);
     setFixedSize(800, 600);
 
-    // 1. UI 视觉初始化
+    // UI 视觉初始化
     this->setAttribute(Qt::WA_StyledBackground, true);
     this->setStyleSheet(
         "QMainWindow {"
@@ -331,7 +329,7 @@ void ArtisanWindow::loadLevel(int level) {
     update();
 }
 
-// 2. 交互逻辑实现
+// 交互逻辑实现
 void ArtisanWindow::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         // 侧边工具栏点击判定
